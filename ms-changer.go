@@ -74,6 +74,16 @@ func loadUnitsFromCSV(filename string) error {
     return nil
 }
 
+func waitForGame(processName string) uint32 {
+    for {
+        pid, err := getProcessID(processName)
+        if err == nil {
+            return pid
+        }
+        time.Sleep(2 * time.Second) // Check every 2 seconds
+    }
+}
+
 func main() {
     err := loadUnitsFromCSV("units.csv")
     if err != nil {
@@ -83,7 +93,10 @@ func main() {
 
     processName := "vsac27_Release_CLIENT.exe"
 
-    pid, err := getProcessID(processName)
+    fmt.Println("🔍 Waiting for game process to start...")
+
+    pid := waitForGame(processName) // Wait until the game starts
+
     if err != nil {
         fmt.Printf("Process not found: %v\n", err)
         return
