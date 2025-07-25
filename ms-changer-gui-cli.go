@@ -21,16 +21,16 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("❌ Usage: ms-changer <unitID>")
+		fmt.Println("❌ Usage: ms-changer <unitValue>")
 		return
 	}
-	unitID, err := strconv.Atoi(os.Args[1])
+	unitValue, err := strconv.Atoi(os.Args[1])
 	if err != nil {
-		fmt.Println("❌ Invalid unitID:", os.Args[1])
+		fmt.Println("❌ Invalid unitValue:", os.Args[1])
 		return
 	}
 
-	fmt.Printf("✅ Writing unitID: %d\n", unitID)
+	fmt.Printf("✅ Writing unitValue: %d\n", unitValue)
 
 	pid := waitForGame(processName)
 	fmt.Println("🟢 Found PID:", pid)
@@ -71,8 +71,8 @@ func main() {
 	ret, _, err = syscall.NewLazyDLL("kernel32.dll").NewProc("WriteProcessMemory").Call(
 		uintptr(handle),
 		target,
-		uintptr(unsafe.Pointer(&unitID)),
-		unsafe.Sizeof(unitID),
+		uintptr(unsafe.Pointer(&unitValue)),
+		unsafe.Sizeof(unitValue),
 		0,
 	)
 	if ret == 0 {

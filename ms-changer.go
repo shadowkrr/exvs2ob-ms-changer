@@ -16,6 +16,7 @@ import (
 )
 
 type Unit struct {
+    Title string
     Name string
     ID   int32
 }
@@ -57,13 +58,14 @@ func loadUnitsFromCSV(filename string) error {
             fmt.Printf("⚠️ Failed to convert id (%s): %v\n", record[0], err)
             continue
         }
-        unitID, err := strconv.Atoi(record[2])
+        unitID, err := strconv.Atoi(record[3])
         if err != nil {
-            fmt.Printf("⚠️ Failed to convert unitID (%s): %v\n", record[2], err)
+            fmt.Printf("⚠️ Failed to convert unitID (%s): %v\n", record[3], err)
             continue
         }
         unitList[int32(id)] = Unit{
-            Name: record[1],
+            Title: record[1],
+            Name: record[2],
             ID:   int32(unitID),
         }
         sortedIDs = append(sortedIDs, int32(id))
@@ -130,10 +132,16 @@ func main() {
     reader := bufio.NewReader(os.Stdin)
 
     for {
-        fmt.Println("==== Unit List (Sorted by ID) ====")
+        fmt.Println("==== Unit List (Grouped by Title) ====")
+
+        currentTitle := ""
         for _, id := range sortedIDs {
             unit := unitList[id]
-            fmt.Printf("%d: %s (%d)\n", id, unit.Name, unit.ID)
+            if unit.Title != currentTitle {
+                fmt.Printf("\n[%s]\n", unit.Title)
+                currentTitle = unit.Title
+            }
+            fmt.Printf("  %d: %s\n", id, unit.Name)
         }
 
         fmt.Print("Enter ID (Press TAB to stop writing and reselect): ")
@@ -153,7 +161,7 @@ func main() {
             continue
         }
 
-        fmt.Printf("✅ %s (%d) Writing started...\n", unit.Name, unit.ID)
+        fmt.Printf("✅ %s, %s (%d) Writing started...\n", unit.Title, unit.Name, unit.ID)
 
         stopChan := make(chan struct{})
         // Write loop (no logs during loop)
