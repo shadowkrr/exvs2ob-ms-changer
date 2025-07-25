@@ -12,10 +12,10 @@ This project includes both:
 
 | File                     | Description                                  |
 |--------------------------|----------------------------------------------|
-| `units.csv`              | CSV list of units (`id,name,unitID`)         |
-| `ms-changer.go`          | Standalone CLI for writing memory            |
-| `ms-changer-gui.go`      | Fyne-based GUI frontend                      |
-| `ms-changer-gui-cli.go`  | CLI backend invoked by GUI                   |
+| `units.csv`              | CSV list of units (`id,title,name,value`)    |
+| `ms-changer.go`          | CLI tool for direct memory manipulation      |
+| `ms-changer-gui.go`      | GUI frontend written in Fyne                 |
+| `ms-changer-gui-cli.go`  | CLI called by the GUI for memory writing     |
 | `README.md`              | This documentation                           |
 
 ---
@@ -44,15 +44,16 @@ go build -o ms-changer-gui-cli.exe ms-changer-gui-cli.go
 Example `units.csv`:
 
 ```csv
-id,name,unitID
-1,Gundam,1001001
-2,Char's Gelgoog,1002001
-3,Z Gundam,2001001
+id,title,name,value
+1,Mobile Suit Gundam,Gundam,1001001
+2,Mobile Suit Gundam,Char's Gelgoog,1002001
+3,Mobile Suit Zeta Gundam,Z Gundam,2001001
 ```
 
-- `id`: Internal ID for menu order
-- `name`: Displayed in GUI
-- `unitID`: Value written into memory
+- `id`: Internal identifier for sorting
+- `title`: Series title of the Mobile Suit
+- `name`: Mobile Suit NameName of the Mobile Suit
+- `value`: Memory value written to the process
 
 ---
 
@@ -60,7 +61,7 @@ id,name,unitID
 
 1. GUI waits for the target game process (`vsac27_Release_CLIENT.exe`)
 2. User selects a Mobile Suit via the GUI (radio buttons)
-3. GUI executes `ms-changer-gui-cli.exe` with the selected `unitID`
+3. GUI executes `ms-changer-gui-cli.exe` with the selected `value`
 4. CLI locates the process and writes to memory
 
 ---

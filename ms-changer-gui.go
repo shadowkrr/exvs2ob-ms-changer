@@ -1,65 +1,64 @@
-
 // +build windows
 
 package main
 
 import (
-    "encoding/csv"
-    "fmt"
-    "os"
-    "os/exec"
-    "strconv"
-    "strings"
-    "syscall"
-    "unsafe"
-    "time"
+	"encoding/csv"
+	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+	"syscall"
+	"unsafe"
+	"time"
 	"sort"
 
-    "fyne.io/fyne/v2"
-    "fyne.io/fyne/v2/app"
-    "fyne.io/fyne/v2/container"
-    "fyne.io/fyne/v2/data/binding"
-    "fyne.io/fyne/v2/widget"
-    "golang.org/x/sys/windows"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/widget"
+	"golang.org/x/sys/windows"
 )
 
 type Unit struct {
-    ID    int32
-    Title string
-    MS    string
-    Value int32
+	ID    int32
+	Title string
+	MS    string
+	Value int32
 }
 
 const processName = "vsac27_Release_CLIENT.exe"
 
 var (
-    allUnits []Unit
-    stopChan chan struct{}
+	allUnits []Unit
+	stopChan chan struct{}
 )
 
 func main() {
-    a := app.New()
-    w := a.NewWindow("ms-changer")
-    w.Resize(fyne.NewSize(700, 1000))
+	a := app.New()
+	w := a.NewWindow("ms-changer")
+	w.Resize(fyne.NewSize(700, 1000))
 
-    statusBind := binding.NewString()
-    status := widget.NewLabelWithData(statusBind)
+	statusBind := binding.NewString()
+	status := widget.NewLabelWithData(statusBind)
 
-    var startButton *widget.Button
-    selectedID := binding.NewString()
+	var startButton *widget.Button
+	selectedID := binding.NewString()
 
-    // Check if game is running
-    if pid, err := getProcessID(processName); err == nil && pid > 0 {
-        statusBind.Set(fmt.Sprintf("✅ Game process found: PID %d", pid))
-    } else {
-        statusBind.Set("🕹️ Waiting for game process...")
-    }
+	// Check if game process is running
+	if pid, err := getProcessID(processName); err == nil && pid > 0 {
+		statusBind.Set(fmt.Sprintf("✅ Game process found: PID %d", pid))
+	} else {
+		statusBind.Set("🕹️ Waiting for game process...")
+	}
 
-    allUnits = loadUnitsFromCSV("units.csv")
-    if len(allUnits) == 0 {
-        statusBind.Set("❌ Failed to load units.csv")
-        return
-    }
+	allUnits = loadUnitsFromCSV("units.csv")
+	if len(allUnits) == 0 {
+		statusBind.Set("❌ Failed to load units.csv")
+		return
+	}
 
 	var radioItems []string
 	var unitMap = map[string]Unit{}
@@ -80,62 +79,61 @@ func main() {
 	scroll := container.NewVScroll(radio)
 	scroll.SetMinSize(fyne.NewSize(660, 900))
 
+	startButton = widget.NewButton("Start Writing", func() {
+		if stopChan != nil {
+			statusBind.Set("⚠️ Already running")
+			return
+		}
 
-    startButton = widget.NewButton("Start Writing", func() {
-        if stopChan != nil {
-            statusBind.Set("⚠️ Already running")
-            return
-        }
+		unitValueStr, err := selectedID.Get()
+		if err != nil || unitValueStr == "" {
+			statusBind.Set("❌ No unit selected")
+			return
+		}
 
-        unitValueStr, err := selectedID.Get()
-        if err != nil || unitValueStr == "" {
-            statusBind.Set("❌ No unit selected")
-            return
-        }
+		stopChan = make(chan struct{})
+		unitValue := unitValueStr
+		statusBind.Set(fmt.Sprintf("🚀 Writing started for ID: %s", unitValue))
+		startButton.Disable()
 
-        stopChan = make(chan struct{})
-        unitValue := unitValueStr
-        statusBind.Set(fmt.Sprintf("🚀 Writing started for ID: %s", unitValue))
-        startButton.Disable()
+		go func() {
+			for {
+				select {
+				case <-stopChan:
+					statusBind.Set("⏹ Writing stopped.")
+					stopChan = nil
+					startButton.Enable()
+					return
+				default:
+					cmd := exec.Command("./ms-changer-gui-cli.exe", unitValue)
+					cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						statusBind.Set(fmt.Sprintf("❌ CLI error: %v", err))
+					} else {
+						statusBind.Set(string(out))
+					}
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	})
 
-        go func() {
-            for {
-                select {
-                case <-stopChan:
-                    statusBind.Set("⏹ Writing stopped.")
-                    stopChan = nil
-                    startButton.Enable()
-                    return
-                default:
-                    cmd := exec.Command("./ms-changer-gui-cli.exe", unitValue)
-                    cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-                    out, err := cmd.CombinedOutput()
-                    if err != nil {
-                        statusBind.Set(fmt.Sprintf("❌ CLI error: %v", err))
-                    } else {
-                        statusBind.Set(string(out))
-                    }
-                    time.Sleep(1 * time.Second)
-                }
-            }
-        }()
-    })
+	stopButton := widget.NewButton("Stop", func() {
+		if stopChan != nil {
+			close(stopChan)
+		}
+	})
 
-    stopButton := widget.NewButton("Stop", func() {
-        if stopChan != nil {
-            close(stopChan)
-        }
-    })
+	w.SetContent(container.NewVBox(
+		widget.NewLabel("Select Mobile Suit:"),
+		scroll,
+		startButton,
+		stopButton,
+		status,
+	))
 
-    w.SetContent(container.NewVBox(
-        widget.NewLabel("Select Mobile Suit:"),
-        scroll,
-        startButton,
-        stopButton,
-        status,
-    ))
-
-    w.ShowAndRun()
+	w.ShowAndRun()
 }
 
 func loadUnitsFromCSV(filename string) []Unit {
@@ -164,7 +162,7 @@ func loadUnitsFromCSV(filename string) []Unit {
 		value, _ := strconv.Atoi(r[3])
 		title := r[1]
 
-		// 作品の出現順に記録
+		// Track appearance order of titles
 		if _, exists := titleOrder[title]; !exists {
 			titleOrder[title] = orderCounter
 			orderCounter++
@@ -178,7 +176,7 @@ func loadUnitsFromCSV(filename string) []Unit {
 		})
 	}
 
-	// 🔽 出現順 → ID昇順 でソート
+	// Sort by appearance order, then by ID
 	sort.Slice(units, func(i, j int) bool {
 		ti := titleOrder[units[i].Title]
 		tj := titleOrder[units[j].Title]
@@ -192,21 +190,21 @@ func loadUnitsFromCSV(filename string) []Unit {
 }
 
 func getProcessID(name string) (uint32, error) {
-    snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-    if err != nil {
-        return 0, err
-    }
-    defer windows.CloseHandle(snap)
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.CloseHandle(snap)
 
-    var entry windows.ProcessEntry32
-    entry.Size = uint32(unsafe.Sizeof(entry))
-    err = windows.Process32First(snap, &entry)
-    for err == nil {
-        exe := syscall.UTF16ToString(entry.ExeFile[:])
-        if strings.EqualFold(exe, name) {
-            return entry.ProcessID, nil
-        }
-        err = windows.Process32Next(snap, &entry)
-    }
-    return 0, fmt.Errorf("process %s not found", name)
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	err = windows.Process32First(snap, &entry)
+	for err == nil {
+		exe := syscall.UTF16ToString(entry.ExeFile[:])
+		if strings.EqualFold(exe, name) {
+			return entry.ProcessID, nil
+		}
+		err = windows.Process32Next(snap, &entry)
+	}
+	return 0, fmt.Errorf("process %s not found", name)
 }

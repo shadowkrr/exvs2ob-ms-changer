@@ -50,6 +50,7 @@ func main() {
 	}
 	fmt.Printf("🧩 Module base address: 0x%X\n", moduleBase)
 
+	// Resolve base pointer address using ReadProcessMemory
 	var baseAddr uintptr
 	basePointerAddr := moduleBase + basePointerOffset
 	ret, _, err := syscall.NewLazyDLL("kernel32.dll").NewProc("ReadProcessMemory").Call(

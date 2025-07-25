@@ -17,8 +17,8 @@ import (
 
 type Unit struct {
     Title string
-    Name string
-    ID   int32
+    Name  string
+    ID    int32
 }
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 var unitList = make(map[int32]Unit)
-var sortedIDs []int32 // Sorted IDs
+var sortedIDs []int32 // Sorted list of unit IDs
 
 func loadUnitsFromCSV(filename string) error {
     file, err := os.Open(filename)
@@ -48,9 +48,9 @@ func loadUnitsFromCSV(filename string) error {
 
     for i, record := range records {
         if i == 0 {
-            continue // Skip header row
+            continue // Skip header
         }
-        if len(record) < 3 {
+        if len(record) < 4 {
             continue
         }
         id, err := strconv.Atoi(record[0])
@@ -65,14 +65,16 @@ func loadUnitsFromCSV(filename string) error {
         }
         unitList[int32(id)] = Unit{
             Title: record[1],
-            Name: record[2],
-            ID:   int32(unitID),
+            Name:  record[2],
+            ID:    int32(unitID),
         }
         sortedIDs = append(sortedIDs, int32(id))
     }
+
     sort.Slice(sortedIDs, func(i, j int) bool {
         return sortedIDs[i] < sortedIDs[j]
     })
+
     return nil
 }
 
@@ -82,7 +84,7 @@ func waitForGame(processName string) uint32 {
         if err == nil {
             return pid
         }
-        time.Sleep(2 * time.Second) // Check every 2 seconds
+        time.Sleep(2 * time.Second) // Retry every 2 seconds
     }
 }
 
@@ -97,7 +99,7 @@ func main() {
 
     fmt.Println("🔍 Waiting for game process to start...")
 
-    pid := waitForGame(processName) // Wait until the game starts
+    pid := waitForGame(processName)
 
     if err != nil {
         fmt.Printf("Process not found: %v\n", err)
@@ -164,7 +166,7 @@ func main() {
         fmt.Printf("✅ %s, %s (%d) Writing started...\n", unit.Title, unit.Name, unit.ID)
 
         stopChan := make(chan struct{})
-        // Write loop (no logs during loop)
+
         go func(unitID int32, stop chan struct{}) {
             for {
                 select {
@@ -178,7 +180,7 @@ func main() {
                         unsafe.Sizeof(unitID),
                         0,
                     )
-                    time.Sleep(1 * time.Second) // Write every second
+                    time.Sleep(1 * time.Second)
                 }
             }
         }(unit.ID, stopChan)
@@ -187,8 +189,8 @@ func main() {
 
         for {
             char, _ := reader.ReadByte()
-            if char == '\t' { // If TAB is pressed
-                close(stopChan) // Stop writing
+            if char == '\t' {
+                close(stopChan)
                 fmt.Println("⏹ Writing stopped.")
                 break
             }
