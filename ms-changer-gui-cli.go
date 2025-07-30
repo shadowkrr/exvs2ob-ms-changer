@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -104,12 +105,12 @@ func getProcessID(name string) (uint32, error) {
 	entry.Size = uint32(unsafe.Sizeof(entry))
 	err = windows.Process32First(snap, &entry)
 	for err == nil {
-		if syscall.UTF16ToString(entry.ExeFile[:]) == name {
+		if strings.EqualFold(syscall.UTF16ToString(entry.ExeFile[:]), name) {
 			return entry.ProcessID, nil
 		}
 		err = windows.Process32Next(snap, &entry)
 	}
-	return 0, fmt.Errorf("process not found")
+	return 0, fmt.Errorf("Process %s not found", name)
 }
 
 func getModuleBaseAddress(pid uint32, moduleName string) (uintptr, error) {
@@ -123,12 +124,12 @@ func getModuleBaseAddress(pid uint32, moduleName string) (uintptr, error) {
 	me.Size = uint32(unsafe.Sizeof(me))
 	err = windows.Module32First(snap, &me)
 	for err == nil {
-		if syscall.UTF16ToString(me.Module[:]) == moduleName {
+		if strings.EqualFold(syscall.UTF16ToString(me.Module[:]), moduleName) {
 			return uintptr(me.ModBaseAddr), nil
 		}
 		err = windows.Module32Next(snap, &me)
 	}
-	return 0, fmt.Errorf("module not found")
+	return 0, fmt.Errorf("Module %s not found", moduleName)
 }
 
 func openProcess(pid uint32) (syscall.Handle, error) {

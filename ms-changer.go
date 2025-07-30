@@ -101,12 +101,11 @@ func main() {
 
     pid := waitForGame(processName)
 
+    handle, err := openProcess(pid)
     if err != nil {
-        fmt.Printf("Process not found: %v\n", err)
+        fmt.Printf("Failed to open process: %v\n", err)
         return
     }
-
-    handle := openProcess(pid)
     defer syscall.CloseHandle(handle)
 
     moduleBase, err := getModuleBaseAddress(pid, processName)
@@ -210,7 +209,7 @@ func getProcessID(processName string) (uint32, error) {
     err = windows.Process32First(snapshot, &entry)
     for err == nil {
         name := syscall.UTF16ToString(entry.ExeFile[:])
-        if name == processName {
+        if strings.EqualFold(name, processName) {
             return entry.ProcessID, nil
         }
         err = windows.Process32Next(snapshot, &entry)
@@ -230,7 +229,7 @@ func getModuleBaseAddress(pid uint32, moduleName string) (uintptr, error) {
     err = windows.Module32First(snapshot, &me)
     for err == nil {
         modName := syscall.UTF16ToString(me.Module[:])
-        if modName == moduleName {
+        if strings.EqualFold(modName, moduleName) {
             return uintptr(me.ModBaseAddr), nil
         }
         err = windows.Module32Next(snapshot, &me)
@@ -238,11 +237,15 @@ func getModuleBaseAddress(pid uint32, moduleName string) (uintptr, error) {
     return 0, fmt.Errorf("Module %s not found", moduleName)
 }
 
-func openProcess(pid uint32) syscall.Handle {
-    handle, _, _ := syscall.NewLazyDLL("kernel32.dll").NewProc("OpenProcess").Call(
+func openProcess(pid uint32) (syscall.Handle, error) {
+    handle, _, err := syscall.NewLazyDLL("kernel32.dll").NewProc("OpenProcess").Call(
         uintptr(PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_VM_OPERATION|PROCESS_QUERY_INFORMATION),
         0,
         uintptr(pid),
     )
-    return syscall.Handle(handle)
+    h := syscall.Handle(handle)
+    if h == 0 || h == syscall.InvalidHandle {
+        return 0, fmt.Errorf("OpenProcess failed: %v", err)
+    }
+    return h, nil
 }
