@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"golang.org/x/sys/windows"
 )
@@ -34,15 +35,26 @@ const processName = "vsac27_Release_CLIENT.exe"
 var (
 	allUnits []Unit
 	stopChan chan struct{}
+	selectedUnit *Unit
+	searchEntry *widget.Entry
+	accordion *container.AppTabs
+	progressBar *widget.ProgressBarInfinite
 )
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("ms-changer")
-	w.Resize(fyne.NewSize(700, 1000))
+	a.SetIcon(theme.ComputerIcon())
+	w := a.NewWindow("🤖 MS Changer - Mobile Suit Selector")
+	w.Resize(fyne.NewSize(900, 700))
+	w.CenterOnScreen()
 
 	statusBind := binding.NewString()
 	status := widget.NewLabelWithData(statusBind)
+	status.Wrapping = fyne.TextWrapWord
+	
+	// Create progress bar (initially hidden)
+	progressBar = widget.NewProgressBarInfinite()
+	progressBar.Hide()
 
 	var startButton *widget.Button
 	selectedID := binding.NewString()
@@ -60,41 +72,42 @@ func main() {
 		return
 	}
 
-	var radioItems []string
-	var unitMap = map[string]Unit{}
-
-	for _, unit := range allUnits {
-		label := fmt.Sprintf("[%s] %s", unit.Title, unit.MS)
-		radioItems = append(radioItems, label)
-		unitMap[label] = unit
+	// Create search functionality
+	searchEntry = widget.NewEntry()
+	searchEntry.SetPlaceHolder("🔍 Search Mobile Suit...")
+	searchEntry.OnChanged = func(query string) {
+		updateAccordion(query, selectedID)
 	}
 
-	radio := widget.NewRadioGroup(radioItems, func(selected string) {
-		unit := unitMap[selected]
-		selectedID.Set(strconv.Itoa(int(unit.Value)))
-	})
-	radio.Horizontal = false
-	radio.Selected = radioItems[0]
+	// Create accordion with grouped units
+	accordion = container.NewAppTabs()
+	updateAccordion("", selectedID)
 
-	scroll := container.NewVScroll(radio)
-	scroll.SetMinSize(fyne.NewSize(660, 900))
+	// Set default selection
+	if len(allUnits) > 0 {
+		selectedUnit = &allUnits[0]
+		selectedID.Set(strconv.Itoa(int(selectedUnit.Value)))
+	}
 
-	startButton = widget.NewButton("Start Writing", func() {
+	startButton = widget.NewButton("🚀 Start Writing", func() {
 		if stopChan != nil {
 			statusBind.Set("⚠️ Already running")
 			return
 		}
 
 		unitValueStr, err := selectedID.Get()
-		if err != nil || unitValueStr == "" {
-			statusBind.Set("❌ No unit selected")
+		if err != nil || unitValueStr == "" || selectedUnit == nil {
+			statusBind.Set("❌ No Mobile Suit selected")
 			return
 		}
 
 		stopChan = make(chan struct{})
 		unitValue := unitValueStr
-		statusBind.Set(fmt.Sprintf("🚀 Writing started for ID: %s", unitValue))
+		statusBind.Set(fmt.Sprintf("🚀 Writing started: %s - %s (ID: %s)", selectedUnit.Title, selectedUnit.MS, unitValue))
 		startButton.Disable()
+		startButton.SetText("⏳ Writing...")
+		progressBar.Show()
+		progressBar.Start()
 
 		go func() {
 			for {
@@ -103,6 +116,9 @@ func main() {
 					statusBind.Set("⏹ Writing stopped.")
 					stopChan = nil
 					startButton.Enable()
+					startButton.SetText("🚀 Start Writing")
+					progressBar.Stop()
+					progressBar.Hide()
 					return
 				default:
 					cmd := exec.Command("./ms-changer-gui-cli.exe", unitValue)
@@ -118,22 +134,133 @@ func main() {
 			}
 		}()
 	})
+	startButton.Importance = widget.HighImportance
 
-	stopButton := widget.NewButton("Stop", func() {
+	stopButton := widget.NewButton("⏹ Stop", func() {
 		if stopChan != nil {
 			close(stopChan)
 		}
 	})
+	stopButton.Importance = widget.MediumImportance
 
-	w.SetContent(container.NewVBox(
-		widget.NewLabel("Select Mobile Suit:"),
-		scroll,
+	// Create main layout
+	header := container.NewVBox(
+		widget.NewRichTextFromMarkdown("# 🤖 Mobile Suit Changer\n**Select your Mobile Suit from the list below:**"),
+		searchEntry,
+		widget.NewSeparator(),
+	)
+
+	mainContent := container.NewVScroll(accordion)
+	mainContent.SetMinSize(fyne.NewSize(850, 400))
+
+	buttonContainer := container.NewGridWithColumns(2,
 		startButton,
 		stopButton,
-		status,
+	)
+
+	statusContainer := container.NewVBox(
+		container.NewBorder(
+			nil, nil, 
+			widget.NewIcon(theme.InfoIcon()), nil,
+			status,
+		),
+		progressBar,
+	)
+
+	footer := container.NewVBox(
+		widget.NewSeparator(),
+		buttonContainer,
+		statusContainer,
+	)
+
+	w.SetContent(container.NewBorder(
+		header, footer, nil, nil,
+		mainContent,
 	))
 
 	w.ShowAndRun()
+}
+
+func updateAccordion(searchQuery string, selectedID binding.String) {
+	// Clear existing tabs
+	for len(accordion.Items) > 0 {
+		accordion.RemoveIndex(0)
+	}
+	
+	// Group units by title
+	titleGroups := make(map[string][]Unit)
+	for _, unit := range allUnits {
+		// Filter by search query if provided
+		if searchQuery != "" {
+			if !strings.Contains(strings.ToLower(unit.MS), strings.ToLower(searchQuery)) &&
+			   !strings.Contains(strings.ToLower(unit.Title), strings.ToLower(searchQuery)) {
+				continue
+			}
+		}
+		titleGroups[unit.Title] = append(titleGroups[unit.Title], unit)
+	}
+	
+	// Sort titles
+	var titles []string
+	for title := range titleGroups {
+		titles = append(titles, title)
+	}
+	sort.Strings(titles)
+	
+	// Create tabs for each title
+	for _, title := range titles {
+		units := titleGroups[title]
+		
+		// Create radio group for this title
+		var radioItems []string
+		unitMap := make(map[string]Unit)
+		
+		for _, unit := range units {
+			label := fmt.Sprintf("🤖 %s", unit.MS)
+			radioItems = append(radioItems, label)
+			unitMap[label] = unit
+		}
+		
+		if len(radioItems) > 0 {
+			radio := widget.NewRadioGroup(radioItems, func(selected string) {
+				if unit, exists := unitMap[selected]; exists {
+					selectedUnit = &unit
+					selectedID.Set(strconv.Itoa(int(unit.Value)))
+				}
+			})
+			radio.Horizontal = false
+			
+			// Set default selection for first tab
+			if len(accordion.Items) == 0 && len(radioItems) > 0 {
+				radio.Selected = radioItems[0]
+				if unit, exists := unitMap[radioItems[0]]; exists {
+					selectedUnit = &unit
+					selectedID.Set(strconv.Itoa(int(unit.Value)))
+				}
+			}
+			
+			scrollContent := container.NewVScroll(radio)
+			scrollContent.SetMinSize(fyne.NewSize(800, 300))
+			
+			// Add emoji based on series
+			titleIcon := "📺"
+			if strings.Contains(title, "ガンダム") {
+				titleIcon = "🚀"
+			} else if strings.Contains(title, "MSV") {
+				titleIcon = "⭐"
+			}
+			
+			tabTitle := fmt.Sprintf("%s %s (%d)", titleIcon, title, len(units))
+			accordion.Append(container.NewTabItem(tabTitle, scrollContent))
+		}
+	}
+	
+	// If no results found, show message
+	if len(accordion.Items) == 0 {
+		noResultsLabel := widget.NewLabel("🔍 No Mobile Suits found matching your search")
+		noResultsLabel.Alignment = fyne.TextAlignCenter
+		accordion.Append(container.NewTabItem("❌ No Results", noResultsLabel))
+	}
 }
 
 func loadUnitsFromCSV(filename string) []Unit {
