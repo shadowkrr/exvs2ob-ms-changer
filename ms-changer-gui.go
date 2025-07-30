@@ -38,7 +38,10 @@ var (
 	selectedUnit *Unit
 	searchEntry *widget.Entry
 	accordion *container.AppTabs
+	mainTabs *container.AppTabs
 	progressBar *widget.ProgressBarInfinite
+	radioGroups map[string]*widget.RadioGroup
+	currentTabIndex int
 )
 
 func main() {
@@ -79,9 +82,35 @@ func main() {
 		updateAccordion(query, selectedID)
 	}
 
+	// Initialize radio groups map
+	radioGroups = make(map[string]*widget.RadioGroup)
+	
 	// Create accordion with grouped units
 	accordion = container.NewAppTabs()
+	accordion.SetTabLocation(container.TabLocationTop)
 	updateAccordion("", selectedID)
+	
+	// Add tab selection listener
+	accordion.OnChanged = func(tab *container.TabItem) {
+		// Update current tab index for keyboard navigation
+		for i, item := range accordion.Items {
+			if item == tab {
+				currentTabIndex = i
+				break
+			}
+		}
+		
+		// Ensure selection is maintained when switching tabs
+		if tab != nil && radioGroups[tab.Text] != nil {
+			radio := radioGroups[tab.Text]
+			if radio.Selected != "" {
+				// Keep existing selection
+			} else if len(radio.Options) > 0 {
+				// Auto-select first item if nothing selected
+				radio.SetSelected(radio.Options[0])
+			}
+		}
+	}
 
 	// Set default selection
 	if len(allUnits) > 0 {
@@ -143,15 +172,15 @@ func main() {
 	})
 	stopButton.Importance = widget.MediumImportance
 
-	// Create main layout
-	header := container.NewVBox(
-		widget.NewRichTextFromMarkdown("# 🤖 Mobile Suit Changer\n**Select your Mobile Suit from the list below:**"),
+	// Create Mobile Suit selection page
+	selectorHeader := container.NewVBox(
+		widget.NewRichTextFromMarkdown("## 🤖 Mobile Suit Selection"),
 		searchEntry,
 		widget.NewSeparator(),
 	)
 
-	mainContent := container.NewVScroll(accordion)
-	mainContent.SetMinSize(fyne.NewSize(850, 400))
+	selectorContent := container.NewVScroll(accordion)
+	selectorContent.SetMinSize(fyne.NewSize(850, 350))
 
 	buttonContainer := container.NewGridWithColumns(2,
 		startButton,
@@ -167,25 +196,148 @@ func main() {
 		progressBar,
 	)
 
-	footer := container.NewVBox(
+	selectorFooter := container.NewVBox(
 		widget.NewSeparator(),
 		buttonContainer,
 		statusContainer,
 	)
 
-	w.SetContent(container.NewBorder(
-		header, footer, nil, nil,
-		mainContent,
-	))
+	selectorPage := container.NewBorder(
+		selectorHeader, selectorFooter, nil, nil,
+		selectorContent,
+	)
+
+	// Create main tab container
+	mainTabs = container.NewAppTabs()
+	mainTabs.SetTabLocation(container.TabLocationTop)
+	
+	// Add Mobile Suit selection tab
+	mainTabs.Append(container.NewTabItem("🤖 Mobile Suits", selectorPage))
+	
+	// Add other pages
+	createAdditionalPages()
+
+	w.SetContent(mainTabs)
 
 	w.ShowAndRun()
 }
 
+func createAdditionalPages() {
+	// About page
+	aboutContent := widget.NewRichTextFromMarkdown(`# 📋 About MS Changer
+
+**MS Changer** is a utility for modifying the in-game Mobile Suit selection of a Windows-based arcade client via memory editing.
+
+## ✨ Features
+- 🎮 **Real-time Mobile Suit switching** during gameplay
+- 🔍 **Search functionality** to quickly find your favorite Mobile Suit
+- 📁 **Organized by series** with intuitive tab navigation
+- 🚀 **Easy-to-use GUI** with visual feedback
+- ⚡ **Instant application** of changes
+
+## 🎯 Supported Games
+- **EXVS2 Overboost** (vsac27_Release_CLIENT.exe)
+
+## ⚠️ Important Notes
+- ✅ **Run as Administrator** for memory access
+- 🛡️ **For educational and personal use only**
+- 🕹️ **Game must be running** before starting operations
+
+---
+*Version 2.0 - Enhanced GUI Edition*`)
+
+	aboutScroll := container.NewVScroll(aboutContent)
+	aboutScroll.SetMinSize(fyne.NewSize(850, 500))
+	
+	// Usage Instructions page
+	usageContent := widget.NewRichTextFromMarkdown(`# 📖 Usage Instructions
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Windows operating system
+- Administrator privileges
+- Target game process running
+
+### 2. Launch Sequence
+1. **Start the game** (vsac27_Release_CLIENT.exe)
+2. **Run MS Changer as Administrator**
+3. Wait for the green "✅ Game process found" message
+
+### 3. Select Mobile Suit
+1. Use the **🔍 Search** box to filter Mobile Suits
+2. **Click on tabs** to browse by series (🚀 Gundam, ⭐ MSV, etc.)
+3. **Select your desired Mobile Suit** from the radio buttons
+
+### 4. Apply Changes
+1. Click **🚀 Start Writing** to begin memory modification
+2. The progress bar will show **⏳ Writing...** status  
+3. **Switch to game** and observe the Mobile Suit change
+4. Click **⏹ Stop** when finished
+
+## 💡 Tips
+- Search works for both Mobile Suit names and series titles
+- Tab numbers show how many Mobile Suits are in each series
+- Status messages provide real-time feedback
+- Changes apply immediately while writing is active
+
+## 🔧 Troubleshooting
+- Ensure game is running before starting
+- Run as Administrator if process access fails
+- Check that the correct .exe and .csv files are present`)
+
+	usageScroll := container.NewVScroll(usageContent)
+	usageScroll.SetMinSize(fyne.NewSize(850, 500))
+
+	// Settings/Info page
+	settingsContent := widget.NewRichTextFromMarkdown(`# ⚙️ Settings & Information
+
+## 📁 File Structure
+- **ms-changer-gui.exe** - Main GUI application
+- **ms-changer-gui-cli.exe** - CLI helper (called by GUI)
+- **ms-changer.exe** - Standalone CLI version
+- **units.csv** - Mobile Suit database
+
+## 🔧 Memory Configuration
+- **Base Pointer Offset**: 0x1EA0708
+- **Fixed Offset**: 0x524
+- **Target Process**: vsac27_Release_CLIENT.exe
+- **Write Interval**: 1 second
+
+## 📊 CSV Format
+` + "```" + `csv
+id,title,ms,value
+1,機動戦士ガンダム,ガンダム,1001001
+2,機動戦士ガンダム,シャア専用ゲルググ,1002001
+` + "```" + `
+
+## 🎨 Interface Elements
+- **Tabs**: Series organization with count display
+- **Search**: Real-time filtering of Mobile Suits
+- **Progress**: Visual feedback during operations
+- **Status**: Detailed operation information
+
+## ⚠️ Safety Notes
+- Always backup save data before use
+- Only use with legitimate game copies
+- Respect online play guidelines
+- Educational purposes only`)
+
+	settingsScroll := container.NewVScroll(settingsContent)
+	settingsScroll.SetMinSize(fyne.NewSize(850, 500))
+
+	// Add all pages to main tabs
+	mainTabs.Append(container.NewTabItem("📋 About", aboutScroll))
+	mainTabs.Append(container.NewTabItem("📖 Usage", usageScroll))
+	mainTabs.Append(container.NewTabItem("⚙️ Settings", settingsScroll))
+}
+
 func updateAccordion(searchQuery string, selectedID binding.String) {
-	// Clear existing tabs
+	// Clear existing tabs and radio groups
 	for len(accordion.Items) > 0 {
 		accordion.RemoveIndex(0)
 	}
+	radioGroups = make(map[string]*widget.RadioGroup)
 	
 	// Group units by title
 	titleGroups := make(map[string][]Unit)
@@ -230,6 +382,19 @@ func updateAccordion(searchQuery string, selectedID binding.String) {
 			})
 			radio.Horizontal = false
 			
+			// Add emoji based on series
+			titleIcon := "📺"
+			if strings.Contains(title, "ガンダム") {
+				titleIcon = "🚀"
+			} else if strings.Contains(title, "MSV") {
+				titleIcon = "⭐"
+			}
+			
+			tabTitle := fmt.Sprintf("%s %s (%d)", titleIcon, title, len(units))
+			
+			// Store radio group for tab switching
+			radioGroups[tabTitle] = radio
+			
 			// Set default selection for first tab
 			if len(accordion.Items) == 0 && len(radioItems) > 0 {
 				radio.Selected = radioItems[0]
@@ -242,16 +407,8 @@ func updateAccordion(searchQuery string, selectedID binding.String) {
 			scrollContent := container.NewVScroll(radio)
 			scrollContent.SetMinSize(fyne.NewSize(800, 300))
 			
-			// Add emoji based on series
-			titleIcon := "📺"
-			if strings.Contains(title, "ガンダム") {
-				titleIcon = "🚀"
-			} else if strings.Contains(title, "MSV") {
-				titleIcon = "⭐"
-			}
-			
-			tabTitle := fmt.Sprintf("%s %s (%d)", titleIcon, title, len(units))
-			accordion.Append(container.NewTabItem(tabTitle, scrollContent))
+			tabItem := container.NewTabItem(tabTitle, scrollContent)
+			accordion.Append(tabItem)
 		}
 	}
 	
@@ -260,6 +417,11 @@ func updateAccordion(searchQuery string, selectedID binding.String) {
 		noResultsLabel := widget.NewLabel("🔍 No Mobile Suits found matching your search")
 		noResultsLabel.Alignment = fyne.TextAlignCenter
 		accordion.Append(container.NewTabItem("❌ No Results", noResultsLabel))
+	} else {
+		// Auto-select the first tab
+		if len(accordion.Items) > 0 {
+			accordion.SelectTab(accordion.Items[0])
+		}
 	}
 }
 
