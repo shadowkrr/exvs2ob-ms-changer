@@ -206,5 +206,5 @@ func getProcessID(name string) (uint32, error) {
 		}
 		err = windows.Process32Next(snap, &entry)
 	}
-	return 0, fmt.Errorf("process %s not found", name)
+	return 0, fmt.Errorf("Process %s not found", name)
 }

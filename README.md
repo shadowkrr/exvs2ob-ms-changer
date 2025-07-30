@@ -12,7 +12,7 @@ This project includes both:
 
 | File                     | Description                                  |
 |--------------------------|----------------------------------------------|
-| `units.csv`              | CSV list of units (`id,title,name,value`)    |
+| `units.csv`              | CSV list of units (`id,title,ms,value`)      |
 | `ms-changer.go`          | CLI tool for direct memory manipulation      |
 | `ms-changer-gui.go`      | GUI frontend written in Fyne                 |
 | `ms-changer-gui-cli.go`  | CLI called by the GUI for memory writing     |
@@ -44,15 +44,15 @@ go build -o ms-changer-gui-cli.exe ms-changer-gui-cli.go
 Example `units.csv`:
 
 ```csv
-id,title,name,value
-1,Mobile Suit Gundam,Gundam,1001001
-2,Mobile Suit Gundam,Char's Gelgoog,1002001
-3,Mobile Suit Zeta Gundam,Z Gundam,2001001
+id,title,ms,value
+1,機動戦士ガンダム,ガンダム,1001001
+2,機動戦士ガンダム,シャア専用ゲルググ,1002001
+3,機動戦士Zガンダム,Zガンダム,2001001
 ```
 
 - `id`: Internal identifier for sorting
 - `title`: Series title of the Mobile Suit
-- `name`: Mobile Suit NameName of the Mobile Suit
+- `ms`: Mobile Suit name
 - `value`: Memory value written to the process
 
 ---
