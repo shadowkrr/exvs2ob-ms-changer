@@ -18,7 +18,7 @@ import (
 const (
 	processName = "vsac27_Release_CLIENT.exe"
 
-	// CEのスクショより
+	// Base RVA from CE screenshot
 	baseRVA = uintptr(0x020023B8)
 )
 

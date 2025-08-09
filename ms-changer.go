@@ -27,7 +27,7 @@ const (
 	PROCESS_VM_OPERATION              = 0x0008
 	PROCESS_QUERY_INFORMATION         = 0x0400
 	
-	// CEのスクショより
+	// Base RVA from CE screenshot
 	baseRVA                   uintptr = 0x020023B8
 )
 
