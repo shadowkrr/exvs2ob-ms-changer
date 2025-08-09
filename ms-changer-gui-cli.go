@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package main
@@ -15,9 +16,14 @@ import (
 )
 
 const (
-	basePointerOffset uintptr = 0x1EA0708
-	fixedOffset       uintptr = 0x524
-	processName                = "vsac27_Release_CLIENT.exe"
+	processName = "vsac27_Release_CLIENT.exe"
+
+	// Base RVA from CE screenshot
+	baseRVA = uintptr(0x020023B8)
+)
+
+var (
+	offsets = []uintptr{0x4A0, 0x108, 0x440, 0x188, 0x38, 0x534}
 )
 
 func main() {
@@ -51,26 +57,32 @@ func main() {
 	}
 	fmt.Printf("🧩 Module base address: 0x%X\n", moduleBase)
 
-	// Resolve base pointer address using ReadProcessMemory
-	var baseAddr uintptr
-	basePointerAddr := moduleBase + basePointerOffset
-	ret, _, err := syscall.NewLazyDLL("kernel32.dll").NewProc("ReadProcessMemory").Call(
-		uintptr(handle),
-		basePointerAddr,
-		uintptr(unsafe.Pointer(&baseAddr)),
-		unsafe.Sizeof(baseAddr),
-		0,
-	)
-	if ret == 0 {
-		fmt.Printf("❌ ReadProcessMemory failed: %v\n", err)
-		return
+	// Pointer chain from CE screenshot
+	addr := moduleBase + baseRVA
+	fmt.Printf("📌 Starting pointer chain from: 0x%X\n", addr)
+	
+	// Follow the pointer chain
+	for i, offset := range offsets {
+		var nextAddr uintptr
+		ret, _, err := syscall.NewLazyDLL("kernel32.dll").NewProc("ReadProcessMemory").Call(
+			uintptr(handle),
+			addr,
+			uintptr(unsafe.Pointer(&nextAddr)),
+			unsafe.Sizeof(nextAddr),
+			0,
+		)
+		if ret == 0 {
+			fmt.Printf("❌ ReadProcessMemory failed at step %d (0x%X): %v\n", i+1, addr, err)
+			return
+		}
+		addr = nextAddr + offset
+		fmt.Printf("🔗 Step %d: 0x%X + 0x%X = 0x%X\n", i+1, nextAddr, offset, addr)
 	}
-	fmt.Printf("📌 Base pointer resolved to: 0x%X\n", baseAddr)
+	
+	target := addr
+	fmt.Printf("✏️ Final target address for writing: 0x%X\n", target)
 
-	target := baseAddr + fixedOffset
-	fmt.Printf("✏️ Target address for writing: 0x%X\n", target)
-
-	ret, _, err = syscall.NewLazyDLL("kernel32.dll").NewProc("WriteProcessMemory").Call(
+	ret, _, err := syscall.NewLazyDLL("kernel32.dll").NewProc("WriteProcessMemory").Call(
 		uintptr(handle),
 		target,
 		uintptr(unsafe.Pointer(&unitValue)),
